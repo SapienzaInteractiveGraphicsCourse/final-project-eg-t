@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script type="text/javascript" src="http://livejs.com/live.js"></script>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script type="module">
+      import * as THREE from './resources/three/build/three.module.js';
+      import {GLTFLoader} from './resources/three/examples/jsm/loaders/GLTFLoader.js';
+      import {OrbitControls} from './resources/three/examples/jsm/controls/OrbitControls.js';
+
+      function main() {
+	  
+	  const container = document.getElementById('container');
+	  const renderer = new THREE.WebGLRenderer();
+	  renderer.shadowMap.enabled = true;
+	  renderer.setPixelRatio(window.devicePixelRatio);
+	  renderer.setSize( window.innerWidth, window.innerHeight);
+	  renderer.outputEncoding = THREE.sRGBEncoding;
+	  container.appendChild(renderer.domElement);
+
+	  // Camera parameters
+	  const aspect = window.innerWidth / window.innerHeight;
+	  const near = 5;
+	  const far = 1000;
+	  //const camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, near, far);
+	  //camera.position.set(20, 15, -20);
+	  const d = 11;
+	  const camera = new THREE.OrthographicCamera(-d * aspect, d*aspect, d, -d, near, far);
+	  camera.position.set(20, 20, -20);
+
+	  const controls = new OrbitControls(camera, renderer.domElement);
+	  controls.update();
+
+	  // Scene
+	  const scene = new THREE.Scene();
+	  scene.background = new THREE.Color(0x281E5D) ; // Indigo background
+
+	  const torchesMesh = [];
+
+	  // GLTF Loader
+	  {
+	      const gltfLoader = new GLTFLoader();
+	      const url = './resources/models/map/map.gltf';
+	      gltfLoader.load(url, (gltf) => {
+		  const root = gltf.scene;
+		  scene.add(root);
+		  // Enable shadows
+		  root.traverse(function(object) {
+		      if (object.isMesh) {
+			  function shouldCast(obj) {
+			      const matName = obj.material.name;
+			      const blackList = ['torch', 'torch_stick', 'torch_ring'];
+			      if (blackList.includes(matName)) {
+				  return false;
+			      }
+			      return true;
+			  }
+			  if (shouldCast(object)) {
+			      object.castShadow = true;
+			      object.receiveShadow = true;
+			  }
+			  // Store torches meshes
+			  if (object.material.name == 'torch') {
+			      torchesMesh.push(object);
+			      console.log(object);
+			  }
+		      }
+		  });	  
+	      });
+	  }
+
+	  // Lights
+	  const lights = [];
+	  const torches = [];
+	  {
+	      function add_pointLight(position, color, intensity, distance) {
+		  const light = new THREE.PointLight(color, intensity);
+		  light.castShadow = true;
+		  light.distance = distance;
+		  // Helper
+		  //const helper = new THREE.PointLightHelper(light);
+		  //scene.add(helper);
+		  //<------
+		  light.position.set(position[0], position[1], position[2]);
+		  scene.add(light);		  
+		  lights.push(light);
+		  return light;
+	      }
+	      const potionColor = 0xB8FF70;
+	      //const flameColor = 0xFFB668;
+	      const flameColor = 0xFC8A17;
+	      const flameDistance = 14;
+	      add_pointLight([0, 2, 0], potionColor, 1, 8);
+	      torches.push(add_pointLight([-6.5, 3.3, -5.5], flameColor, 1.5, flameDistance));
+	      torches.push(add_pointLight([6.5, 3.3, 7], flameColor, 1.5, flameDistance));
+	      torches.push(add_pointLight([-3, 3.3, 7], flameColor, 1.5, flameDistance));
+	      torches.push(add_pointLight([10, 3.3, -10], flameColor, .5, flameDistance));
+	  }
+
+	  
+	  
+	  
+	  function render(time) {
+	      torches.forEach( (light) => {
+		  light.position.y += Math.sin(time / 100) / 70;
+	      });
+	      torchesMesh.forEach( (torch) => {
+		  torch.position.y += Math.sin(time / 100) / 70;
+		  torch.rotation.y = (time / 100) % (2 * Math.PI);
+	      });
+	      renderer.render(scene, camera);
+	      requestAnimationFrame(render);
+	  }
+	  requestAnimationFrame(render);
+      }
+      
+      main();
+    </script>
+  </body>
+</html>
