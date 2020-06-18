@@ -10,12 +10,13 @@
       import * as THREE from './resources/three/build/three.module.js';
       import {GLTFLoader} from './resources/three/examples/jsm/loaders/GLTFLoader.js';
       import {OrbitControls} from './resources/three/examples/jsm/controls/OrbitControls.js';
+      import {SkeletonUtils} from './resources/three/examples/jsm/utils/SkeletonUtils.js';
+      
 
       function main() {
-	  
 	  const container = document.getElementById('container');
 	  const renderer = new THREE.WebGLRenderer();
-	  renderer.shadowMap.enabled = true;
+	  //renderer.shadowMap.enabled = true;
 	  renderer.setPixelRatio(window.devicePixelRatio);
 	  renderer.setSize( window.innerWidth, window.innerHeight);
 	  renderer.outputEncoding = THREE.sRGBEncoding;
@@ -25,11 +26,9 @@
 	  const aspect = window.innerWidth / window.innerHeight;
 	  const near = 5;
 	  const far = 1000;
-	  //const camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, near, far);
-	  //camera.position.set(20, 15, -20);
-	  const d = 11;
-	  const camera = new THREE.OrthographicCamera(-d * aspect, d*aspect, d, -d, near, far);
-	  camera.position.set(20, 20, -20);
+	  const fov = 45;
+	  const camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, near, far);
+	  camera.position.set(30, 30, 30);
 
 	  const controls = new OrbitControls(camera, renderer.domElement);
 	  controls.update();
@@ -38,86 +37,43 @@
 	  const scene = new THREE.Scene();
 	  scene.background = new THREE.Color(0x281E5D) ; // Indigo background
 
-	  const torchesMesh = [];
-	  
-
-	  // GLTF Loader
-	  {
-	      const gltfLoader = new GLTFLoader();
-	      const url = './resources/models/map/map.gltf';
-	      gltfLoader.load(url, (gltf) => {
-		  const root = gltf.scene;
-		  scene.add(root);
-		  // Enable shadows
-		  root.traverse(function(object) {
-		      if (object.isMesh) {
-			  function shouldCast(obj) {
-			      const matName = obj.material.name;
-			      const blackList = ['torch', 'torch_stick', 'torch_ring'];
-			      if (blackList.includes(matName)) {
-				  return false;
-			      }
-			      return true;
-			  }
-			  if (shouldCast(object)) {
-			      object.castShadow = true;
-			      object.receiveShadow = true;
-			  }
-			  // Store torches meshes
-			  if (object.material.name == 'torch') {
-			      torchesMesh.push(object);
-			  }
-		      }
-		  });	  
-	      });
-	  }
-
-	  
-	  
-	  // Lights
-	  const lights = [];
-	  const torches = [];
-	  const torch_y = 3.4;
-	  {
-	      function add_pointLight(position, color, intensity, distance) {
-		  const light = new THREE.PointLight(color, intensity);
-		  light.castShadow = true;
-		  light.distance = distance;
-		  // Helper
-		  //const helper = new THREE.PointLightHelper(light);
-		  //scene.add(helper);
-		  //<------
-		  light.position.set(position[0], position[1], position[2]);
-		  scene.add(light);		  
-		  lights.push(light);
-		  return light;
+	  const MODELS = [
+	      {   // Skeleton model
+		  filename: 'skeleton/skeletorn_rig'
 	      }
-	      const potionColor = 0xB8FF70;
-	      //const flameColor = 0xFFB668;
-	      const flameColor = 0xFC8A17;
-	      const flameDistance = 14;
-	      add_pointLight([0, 2, 0], potionColor, 1, 8);
-	      torches.push(add_pointLight([-6.5, torch_y, -5.5], flameColor, 1.5, flameDistance));
-	      torches.push(add_pointLight([6.5, torch_y, 7], flameColor, 1.5, flameDistance));
-	      torches.push(add_pointLight([-3, torch_y, 7], flameColor, 1.5, flameDistance));
-	      torches.push(add_pointLight([10, torch_y, -10], flameColor, .5, flameDistance));
-	  }
+	  ];
+
+	  // Define units
+	  const UNITS = [
+	      {
+		  modelName:   'skeleton/skeletorn_rig',
+		  meshName:    'cube',
+		  //position:    {x: 0, y: 0, z: 0},
+		  //rotation:    {x: 0, y: 0, z: 0},
+		  scale:       1
+	      },
+	      {
+		  modelName:  'skeleton/skeletorn_rig',
+		  meshName:   'cube',
+		  position:   {x: 10, y: 0, z: 0},
+		  rotation:   {x: Math.PI/2, y: 0, z: 0},
+		  scale:      0.5
+	      }
+	  ];
+
+
+	  // Model instantiating phase
+	  loadModels();
 
 	  
-	  
-	  
-	  function render(time) {
-	      torches.forEach( (light) => {
-		  light.position.y = torch_y + Math.sin(time / 100) / 20;
-	      });
-	      torchesMesh.forEach( (torch) => {
-		  torch.position.y = torch_y + Math.sin(time / 100) / 20;
-		  torch.rotation.y = (time / 100) % (2 * Math.PI);
-	      });
+
+	  function render() {
 	      renderer.render(scene, camera);
 	      requestAnimationFrame(render);
 	  }
 	  requestAnimationFrame(render);
+	  render();
+
 
 	  // Multiple models functions
 	  /**
@@ -203,11 +159,10 @@
 			  console.log('All models loaded. Instancing...');
 			  istantiateUnits(UNITS);
 		      }
-		  });
-		  
+		  });		  
 	      }
 	  }
-      }      
+      }
       main();
     </script>
   </body>
