@@ -7,7 +7,9 @@
   </head>
   <body>
     <div id="container"></div>
+    <script type="module" src="./collision.js"></script>
     <script type="module">
+      import {attack} from './collision.js';
       import * as THREE from './resources/three/build/three.module.js';
       import {GLTFLoader} from './resources/three/examples/jsm/loaders/GLTFLoader.js';
       import {OrbitControls} from './resources/three/examples/jsm/controls/OrbitControls.js';
@@ -43,18 +45,18 @@
 	  const scene     = new THREE.Scene();
 	  const clock     = new THREE.Clock();
 
-	  // bboxes
-	  const bboxes       = [];
+	  const bboxes     = [];
+	  const collisions = [];
 
 	  // Initialize noise generator
-	  noise.seed(0);
+	  noise.seed(0);	  
 	  
 	  
 	  // Animated objects section
 	  // Define models
 	  const MODELS = [
 	      {   // Skeleton model
-		  filename: 'skeleton/skeletorn_rig'
+		  filename: 'simguy/simguy'
 	      },
 	      {   // Map model
 		  filename: 'map/map',
@@ -67,85 +69,62 @@
 		  modelName:   'map/map',
 	      },
 	      {
-		  modelName:   'skeleton/skeletorn_rig',
-		  meshName:    'cube',
-		  //position:    {x: 0, y: 0, z: 0},
-		  //rotation:    {x: 0, y: 0, z: 0},
-		  scale:       0.3
-	      },
-	      {
-		  modelName:  'skeleton/skeletorn_rig',
-		  meshName:   'cube',
-		  position:   {x: 5, y: 0, z: 0},
-		  rotation:   {x: 0, y: Math.PI/2, z: 0},
-		  scale:      0.3
-	      },
-	      {
-		  modelName:  'skeleton/skeletorn_rig',
-		  meshName:   'cube',
-		  position:   {x: -2, y: 0, z: -6},
-		  rotation:   {x: 0, y: -Math.PI/2, z: 0},
-		  scale:      0.3
-	      },
-	      {
-		  modelName:  'skeleton/skeletorn_rig',
-		  meshName:   'cube',
-		  position:   {x: -2, y: 0, z: 6},
-		  rotation:   {x: 0, y: Math.PI/2, z: 0},
-		  scale:      0.3
-	      },
+		  modelName:   'simguy/simguy',
+		  meshName:    'baseframe',
+		  position:    {x: 5, y: 0, z: 5},
+		  rotation:    {x: 0, y: 1, z: 0},
+		  scale:       0.3,
+		  planner:     'randomwalk'
+	      }
 	  ];
 
 	  /** 
 	   * Animation Handling
 	   */
-	  const animationHandlers = [
-	      {// TorchLights handler
-		  name: 'torchLights',
-		  meshes: [],
-		  base:   [],
-		  time: 0,
-		  timeScale: 5,
-		  install: function(mesh) {
-		      this.meshes.push(mesh);
-		      this.base.push(mesh.position);
-		  },
-		  update: function(deltaTime) {
-		      this.time += deltaTime;
-		      const increment = Math.sin(this.time * this.timeScale) / 200;
-		      for( let i = 0; i < this.meshes.length; ++i) {
-			  this.meshes[i].position.set(this.base[i].x,
-						      this.base[i].y + increment,
-						      this.base[i].z);
-		      }
-		  }
-	      },
-	      {// Torch handler
-		  name: 'torch',
-		  meshes: [],
-		  base:   [],
-		  time:   0,
-		  timeScale: 5,
-		  install: function(mesh) {
-		      this.meshes.push(mesh);
-		      this.base.push(mesh.position);
-		  },
-		  update: function(deltaTime) {
-		      this.time += deltaTime;
-		      const increment = Math.sin(this.time * this.timeScale) / 200;
-		      for( let i = 0; i < this.meshes.length; ++i) {
-			  this.meshes[i].position.y = this.base[i].y + increment;
-			  this.meshes[i].rotation.y = (this.time * this.timeScale) % (2 * Math.PI);
-		      }
-		  }
+	  /**
+	   * @Class
+	   * Base AnimationHandler class
+	   */
+	  class AnimationHandler {
+	      constructor(object) {
+		  this.object = object;
+		  this.time   = 0;
 	      }
-	      // TODO
-	  ];
+	  }
+	  /**
+	   * @Class
+	   * TorchAnimation class. Handle animations for torches
+	   */
+	  class TorchAnimation extends AnimationHandler {
+	      constructor(object, timeScale, ampMult) {
+		  super(object);
+		  this.timeScale = timeScale;
+		  this.ampMult = ampMult;
+		  this.basePos  = new THREE.Vector3().copy(object.position);
+	      }	      
+	      update(deltaTime) {
+		  this.time += deltaTime;
+		  const increment = Math.sin(this.time * this.timeScale) * this.ampMult;
+		  this.object.position.y = this.basePos.y + increment;
+		  this.object.rotation.y = (this.time * this.timeScale) % (2 * Math.PI);
+	      }
+	  }
+	  /**
+	   * @Class
+	   * SkeletonAnimation class. Handle animations for skeletons.
+	   */
+	  class SkeletonAnimation extends AnimationHandler {
+	      constructor (object) {
+		  super(object);
+	      }
+	  }
+	  
+	  const animations = [];
 
 	  /** 
 	   * Trajectory Planner
 	   */
-	  const trajectoryPlanner = [];
+	  const planners = [];
 	  
 
 	  initRenderer();
@@ -157,61 +136,64 @@
 	  initMapLights(MODELS[1].scene);
 	  render();
 
-	  	  // Temp controls [DEBUG]
+	  // Temp controls [DEBUG]
 	  const controls  = new OrbitControls(camera, renderer.domElement);
 	  controls.update();
-
-	  // TEST PLANNER
-	  const foolPlanner = {
-	      update: function(object, time) {
-		  const step = 0.005;
-		  object.position.set(object.position.x * (1 - step),
-				      object.position.y * (1 - step),
-				      object.position.z * (1 - step));				      
-	      }
-	  };
-	  const randomWalkPlanner = {
-	      update: function(object, time) {
-		  // Update BBOX
-		  object.bbox.setFromObject(object).translate(new THREE.Vector3(0, 3.8, 0));
-		  
-		  const step = 0.1;
-		  const pos = object.position;
-		  const rotation_step = noise.perlin3(pos.x, pos.y, time);
-		  object.rotation.set(object.rotation.x,
-				      object.rotation.y + rotation_step * 0.1,
-				      object.rotation.z);
-		  let targetBBox = checkCollision(object.bbox);
-		  if(targetBBox) {
-		      // Handle collision
-		      
-		  }
-		  object.translateOnAxis(new THREE.Vector3(1, 0, 0), Math.random() * step);
-	      }
-	  };
 	  
+	  /**
+	   * @Class
+	   * Base Planner Class
+	   */
+	  class Planner {
+	      constructor(object) {
+		  this.object = object;
+	      }
+	  }
 
-
-
+	  /**
+	   * @Class
+	   * RandomWalk Planner
+	   */
+	  class RandomWalker extends Planner {
+	      constructor(object, bbox, step) {
+		  super(object);
+		  this.bbox = bbox;
+		  this.step = step;
+		  this.safePos = new THREE.Vector3().copy(object.position);
+	      }
+	      update(time, collisionTarget) {
+		  this.bbox.setFromObject(this.object);
+		  attack();
+		  // Check if collision happened
+		  if (collisionTarget) {
+		      
+		  } else {  
+		      const rnStep = noise.perlin3(this.object.position.x,
+						   this.object.position.z,
+						   time);
+		      this.object.rotateOnAxis(new THREE.Vector3(0, 1, 0), rnStep * this.step);
+		      this.object.translateOnAxis(new THREE.Vector3(1, 0, 0), Math.random() * this.step);
+		  }
+	      }
+	  }
+	   
 	  /**
 	   * Rendering function
 	   */
 	  function render() {
 	      // get the time elapsed since the last frame
 	      var updateDelta = clock.getDelta();
-
-	      // Update Bounding Boxes
 	      
-
-	      
-	      // Update animation frames TODO
-	      for (let i = 0; i < animationHandlers.length; ++i) {
-	          animationHandlers[i].update(updateDelta);
+	      // Update animations
+	      for (let i = 0; i < animations.length; ++i) {
+		  animations[i].update(updateDelta);
 	      }
+	      
 	      // Call TrajectoryPlanners
-	      for (let i = 0; i < trajectoryPlanner.length; ++i) {
-		  let object = trajectoryPlanner[i].object;
-		  trajectoryPlanner[i].planner.update(object, clock.elapsedTime);
+	      for (let i = 0; i < planners.length; ++i) {
+		  // Check for collisions
+		  const targetBB = checkCollision(planners[i].bbox);		  
+		  planners[i].update(clock.elapsedTime, targetBB);
 	      }
 	      
 	      renderer.render(scene, camera);
@@ -261,7 +243,7 @@
 							flameDistance);
 		  }
 		  // Install the light into torch animationHandler
-		  animationHandlers[0].install(torchLight);		  
+		  animations.push(new TorchAnimation(torchLight, 5, 0.05));
 	      }
 	      
 	      function add_pointLight(position, color, intensity, distance) {
@@ -277,7 +259,6 @@
 		  return light;
 	      }	      
 	  }
-	  
 	  /**
 	   * Load a 3D model from a GLTF file.
 	   */
@@ -289,7 +270,6 @@
 		  model.scene = root;
 		  // Enable shadows
 		  if (model.filename == 'map/map') {
-		      console.debug(gltf.scene);
 		      gltf.scene.traverse( (object) => {
 			  if (object.isMesh) {
 			      function shouldCast(obj) {
@@ -306,7 +286,7 @@
 				  object.receiveShadow = true;
 			      }
 			      if (object.material.name == 'torch') {
-				  animationHandlers[1].install(object);
+				  animations.push(new TorchAnimation(object, 8, 0.05));
 			      }
 			  }});
 		  } else {
@@ -371,14 +351,20 @@
 			      clonedScene.rotation.z = u.rotation.z;
 			  }
 			  // Create bounding box for the unit
-			  const bbox = new THREE.Box3().setFromObject(clonedScene).translate(new THREE.Vector3(0, 3.5, 0));
+			  const bbox = new THREE.Box3().setFromObject(clonedScene);
 			  clonedScene.bbox = bbox;
 			  bboxes.push(bbox);
 			  // Add helper
 			  scene.add(new THREE.Box3Helper(bbox, 0xffff00));
 			  
-			  //attachPlanner(clonedScene, randomWalkPlanner);
-			  console.debug(clonedScene);
+			  // Attach Planner
+			  if (u.planner) {
+			      if (u.planner == 'randomwalk')
+				  planners.push(new RandomWalker(clonedScene, bbox, 0.1));
+			      
+			  }
+			  console.log(clonedScene);
+			  
 		      }
 		  } else {
 		      console.error("Can not find model", u.modelName);
@@ -403,13 +389,7 @@
 		  });
 	      }
 	  }
-
-	  /**
-	   * Trajectory Planner Functions
-	   */
-	  function attachPlanner(object, planner) {
-	      trajectoryPlanner.push({object, planner});
-	  }
+	  
 
 	  /**
 	   * Compute Bounding Boxes for the map
@@ -418,7 +398,10 @@
 	      const blackList = [
 		  'floor',
 		  'Plane005',
-		  'Plane'
+		  'Plane',
+		  'firepit',
+		  'potatoes',
+		  'hole'		  
 	      ];
 	      if (blackList.includes(object.name)) {
 		  return;
@@ -438,6 +421,24 @@
 	      }
 	      return null;
 	  }
+
+	  /**
+	   * Compute collision offset
+	   */
+	  function computeCollisionOffset(objectBB, collisionBB) {
+	      const cMax = collisionBB.max;
+	      const cMin = collisionBB.min;
+	      const oMax = objectBB.max;
+	      const oMin = objectBB.min;
+	      const cDist = cMin.clone().sub(cMax);
+	      const offset = new THREE.Vector3(0, 0, 0);
+	      if (cMax.x == oMax.x) offset.x += cDist.x;
+	      if (cMax.z == oMax.z) offset.z += cDist.z;
+	      if (cMin.x == oMin.x) offset.x -= cDist.x;
+	      if (cMin.z == oMin.z) offset.z -= cDist.z;
+	      return offset;
+	  }
+	  
       } // function main()
       main();
     </script>
