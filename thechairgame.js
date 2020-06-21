@@ -36,7 +36,9 @@ const planners   = [];
 
 const cbboxes     = []; // Static bounding boxes  (Map, chair related)
 const dbboxes     = []; // Dynamic bounding boxes (guys related)
-var collisions  = []; // Current collisions to be resolved.
+var collisions    = []; // Current collisions to be resolved.
+
+const chairs      = []; // List of chairs available
 
 const models = {
     'simguy': {
@@ -44,50 +46,59 @@ const models = {
     },
     'map': {
 	file:'map/map.gltf'
-    }/*,
+    },
     chair: {
-	file:'simguy/simguy.gltf'
+	file:'chair/chair.gltf'
     }
-     */
 }
 
 const units = {
     'map1': {model:'map', onLoad:onMapLoaded},
+    'chair1':{model:'chair', onLoad:onChairLoaded},
+    'chair2':{model:'chair', onLoad:onChairLoaded},
+    'chair3':{model:'chair', onLoad:onChairLoaded},
+    'chair4':{model:'chair', onLoad:onChairLoaded},
     'guy1': {
-	model:'simguy',
-	mesh:'baseframe',
-	onLoad:onGuyLoad,
-	position: new THREE.Vector3(5, 0, 3),
-	scale: 0.3
+	model:       'simguy',
+	mesh:        'baseframe',
+	onLoad:      onGuyLoaded,
+	onCollision: onGuyCollide,
+	position:    new THREE.Vector3(5, 0, 3),
+	scale:       0.3
     },
     'guy2': {
-	model:'simguy',
-	mesh:'baseframe',
-	onLoad:onGuyLoad,
-	position: new THREE.Vector3(-3, 0, -5),
-	scale: 0.3
+	model:       'simguy',
+	mesh:        'baseframe',
+	onLoad:      onGuyLoaded,
+	onCollision: onGuyCollide,
+	position:    new THREE.Vector3(3, 0, -7),
+	scale:       0.3
     },
     'guy3': {
-	model:'simguy',
-	mesh:'baseframe',
-	onLoad:onGuyLoad,
-	position: new THREE.Vector3(-3, 0, 4),
-	scale: 0.3
+	model:       'simguy',
+	mesh:        'baseframe',
+	onLoad:      onGuyLoaded,
+	onCollision: onGuyCollide,
+	position:    new THREE.Vector3(1, 0, 5),
+	scale:       0.3
     },
     'guy4': {
-	model:'simguy',
-	mesh:'baseframe',
-	onLoad:onGuyLoad,
-	position: new THREE.Vector3(-3, 0, -5),
-	scale: 0.3
+	model:       'simguy',
+	mesh:        'baseframe',
+	onLoad:      onGuyLoaded,
+	onCollision: onGuyCollide,
+	position:    new THREE.Vector3(-3, 0, -3),
+	scale:       0.3
     },
     'guy5': {
-	model:'simguy',
-	mesh:'baseframe',
-	onLoad:onGuyLoad,
-	position: new THREE.Vector3(-3, 0, 4),
-	scale: 0.3
-    } 
+	model:       'simguy',
+	mesh:        'baseframe',
+	onLoad:      onGuyLoaded,
+	onCollision: onGuyCollide,
+	position:    new THREE.Vector3(-2, 0, 6),
+	scale:       0.3
+    }
+    
 };
 
 function loadModel(model, onLoadComplete) {
@@ -134,6 +145,8 @@ function loadUnits() {
 		u.scene = m.scene.clone();
 	    }
 	    scene.add(u.scene);
+	    // Add loopback reference from Object3D to unit element
+	    u.scene.unit = u;
 	    // Process the unit specifications, if available
 	    if (u.position) {
 		u.scene.position.copy(u.position);
@@ -158,19 +171,95 @@ function onMapLoaded(scene) {
     
 }
 
-function onGuyLoad(object) {
-    console.log(object);
+function onChairLoaded(object) {
+    enableShadows(object);
+    object.position.set((Math.random() - 0.5) * 10,
+			0,
+			(Math.random() - 0.5) * 10);
+    object.rotation.set(0,
+			Math.random() * 2 * Math.PI,
+			0);
+    createObjectBBox(object, false);
+    chairs.push(object);
+}
+
+function onGuyLoaded(object) {
+    //console.log(object);
     enableShadows(object);
     const bbox = createObjectBBox(object, true);
     
-    planners.push(new PLAN.RandomWalker(object, 0.1));
-    //planners.push(new PLAN.HumanPlanner(object, document, 0.05, frameHelper));    
+    //planners.push(new PLAN.RandomWalker(object, 0.1));
+    //planners.push(new PLAN.HumanPlanner(object, document, 0.05, frameHelper));
+    const planner = new PLAN.ChairFinder(object, chairs, 0.07, 0.1);
+    object.unit.planner = planner;
+    planners.push(planner);
+}
+
+function onGuyCollide(collision) {
+    const object = collision.object;
+    const target = collision.tobject;
+    if (target.unit) {
+	if (target.unit.model == 'chair') {
+	    // Chair hit
+	    if(!target.unit.touched) {
+		// i dont want this
+		if (!object.unit.planner.winner) {
+		    object.unit.planner.winner = true;
+		}
+		handleChairCollision(target);
+
+	    }
+	} else {
+	    // Point away from the object, in order to simulate reflections
+	    const iNormL = computeLocalCollisionNormal(object, collision.bbox, collision.ibbox);
+	    const newDir = new THREE.Vector3(1,0,0).reflect(iNormL);
+	    object.rotation.set(object.rotation.x,
+				object.rotation.y + new THREE.Vector3(1,0,0).angleTo(newDir),
+				object.rotation.z);
+	}
+    }
+}
+
+function handleChairCollision(chair) {
+    // :)
+    console.log('Im so dirty :(');
+    chair.unit.touched = true;
+    // check winning conditions
+    if (checkWinningCondition()) endGame();
+}
+
+function checkWinningCondition() {
+    let availableChairs = chairs.length;
+    for (const chair of chairs) {
+	if (chair.unit.touched)
+	    availableChairs--;
+    }
+    if (!availableChairs) {
+	return true;
+    }
+    return false;
+}
+
+function endGame() {
+    // kill non winning characters
+    for (const u in units) {
+	const unit = units[u];
+	if (unit.model == 'simguy') {
+	    if (unit.planner) {
+		console.log(unit.planner.winner);
+		if (!unit.planner.winner) {
+		    scene.remove(unit.scene);
+		}
+	    }
+	}
+    }
+    render();
 }
 
 function createObjectBBox(object, isDynamic) {
     const bbox = new THREE.Box3().setFromObject(object);
     if (isDynamic) dbboxes.push({object, bbox});
-    else cbboxes.push(bbox);
+    else cbboxes.push({object, bbox});
     //scene.add(new THREE.Box3Helper(bbox));
     return bbox;
 }
@@ -288,7 +377,13 @@ function render() {
     //if (collisions.length > 0) console.log('Found ', collisions.length, ' collisions.');
     for (let i = 0; i < collisions.length; ++i) {
 	const collision = collisions[i];
-	COLL.evalCollision(collision.object, collision.bbox, collision.ibbox);	
+	COLL.evalCollision(collision.object, collision.bbox, collision.ibbox);
+	// Check if unit has onCollision()
+	const object = collision.object;
+	const target = collision.tobject;
+	if (object.unit.onCollision) {
+	    object.unit.onCollision(collision)
+	}
     }
     // Clean resolved collisions
     collisions = [];
@@ -311,8 +406,8 @@ function main() {
     initCamera();
     initScene();
     loadModels();
-    const controls  = new OrbitControls(camera, renderer.domElement);
-    controls.update();
+    //const controls  = new OrbitControls(camera, renderer.domElement);
+    //controls.update();
     render();
 }
 

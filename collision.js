@@ -5,15 +5,28 @@ export function updateBBox(dbbox) {
 }
 
 export function checkCollision(dbbox, cbbox) {
-    if (dbbox.bbox.intersectsBox(cbbox)) {
+    if (dbbox.bbox.intersectsBox(cbbox.bbox)) {
 	// Intersection happened, return intersection bbox
-	const ibbox = new THREE.Box3().copy(cbbox).intersect(dbbox.bbox);
-	return {object:dbbox.object,
-		bbox:  dbbox.bbox,
-		ibbox};
+	const ibbox = new THREE.Box3().copy(cbbox.bbox).intersect(dbbox.bbox);
+	return {object:dbbox.object, // First object involved (dynamic bbox)
+		bbox:  dbbox.bbox,   // First bbox   involved
+		ibbox: ibbox,        // Intersection bbox
+		tobject: cbbox.object}; // Second object involved (static bbox)
     } else {
 	return null;
     }	
+}
+
+export function computeLocalCollisionNormal(object, obbox, ibbox) {
+    const iCenter = new THREE.Vector3();
+    const oCenter = new THREE.Vector3();
+    ibbox.getCenter(iCenter);
+    obbox.getCenter(oCenter);
+    // Invert rotation matrix to get world -> local transform
+    const iRot    = new THREE.Matrix4().extractRotation(object.matrix);
+    iRot.getInverse(iRot);
+    const iNormL  = new THREE.Vector3(oCenter).sub(iCenter).setY(0).normalize();
+    return iNormL;
 }
 
 export function evalCollision(object, obbox, ibbox) {
