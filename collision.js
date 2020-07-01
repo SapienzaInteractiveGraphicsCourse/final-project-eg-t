@@ -25,8 +25,8 @@ export function computeLocalCollisionNormal(object, obbox, ibbox) {
     // Invert rotation matrix to get world -> local transform
     const iRot    = new THREE.Matrix4().extractRotation(object.matrix);
     iRot.getInverse(iRot);
-    const iNormL  = new THREE.Vector3(oCenter).sub(iCenter).setY(0).normalize();
-    return iNormL;
+    const iNormL  = new THREE.Vector3().clone(oCenter).sub(iCenter).setY(0).normalize();
+    return iNormL.applyMatrix4(iRot);
 }
 
 export function evalCollision(object, obbox, ibbox) {

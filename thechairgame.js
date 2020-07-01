@@ -13,7 +13,7 @@ import * as COLL from './collision.js';
 const aspect = window.innerWidth / window.innerHeight;
 const near   = 5;
 const far    = 1000;
-const d      = 11;
+const d      = 9;
 // Scene
 const backgroundColor = 0x281E5D; // indigo
 const colorPotion     = 0xB8FF70;
@@ -47,58 +47,76 @@ const models = {
     'map': {
 	file:'map/map.gltf'
     },
-    chair: {
+    'chair': {
 	file:'chair/chair.gltf'
+    },
+    'skeleton': {
+	file:'skeleton/scene.gltf'
     }
 }
 
 const units = {
     'map1': {model:'map', onLoad:onMapLoaded},
-    'chair1':{model:'chair', onLoad:onChairLoaded},
-    'chair2':{model:'chair', onLoad:onChairLoaded},
-    'chair3':{model:'chair', onLoad:onChairLoaded},
-    'chair4':{model:'chair', onLoad:onChairLoaded},
+    'chair1':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
+    'chair2':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
+    'chair3':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
+    'chair4':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
     'guy1': {
-	model:       'simguy',
+	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
-	onCollision: onGuyCollide,
 	position:    new THREE.Vector3(5, 0, 3),
-	scale:       0.3
+	scale:       0.3,
+	plan:        'ai_hard'
+	
     },
     'guy2': {
-	model:       'simguy',
+	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
-	onCollision: onGuyCollide,
 	position:    new THREE.Vector3(3, 0, -7),
-	scale:       0.3
+	scale:       0.3,
+	plan:        'human'
     },
     'guy3': {
-	model:       'simguy',
+	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
-	onCollision: onGuyCollide,
 	position:    new THREE.Vector3(1, 0, 5),
-	scale:       0.3
+	scale:       0.3,
+	plan:        'ai_hard'
     },
     'guy4': {
-	model:       'simguy',
+	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
-	onCollision: onGuyCollide,
 	position:    new THREE.Vector3(-3, 0, -3),
-	scale:       0.3
+	scale:       0.3,
+	plan:        'ai_easy'
     },
     'guy5': {
-	model:       'simguy',
+	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
-	onCollision: onGuyCollide,
 	position:    new THREE.Vector3(-2, 0, 6),
-	scale:       0.3
+	scale:       0.3,
+	plan:        'ai_easy'
     }
     
+};
+
+const gameState = {
+    state: 0,
+    chairs: chairs,
+    onUpdate: function () {
+	if (this.state == 1) {
+	    const winFlag = checkWinningCondition();
+	    if (winFlag) {
+		endGame();
+	    }
+	}
+	
+    }
 };
 
 function loadModel(model, onLoadComplete) {
@@ -188,41 +206,36 @@ function onGuyLoaded(object) {
     enableShadows(object);
     const bbox = createObjectBBox(object, true);
     
-    //planners.push(new PLAN.RandomWalker(object, 0.1));
-    //planners.push(new PLAN.HumanPlanner(object, document, 0.05, frameHelper));
-    const planner = new PLAN.ChairFinder(object, chairs, 0.07, 0.1);
-    object.unit.planner = planner;
-    planners.push(planner);
-}
+    // Add random seed [0, 1000] for animation offset
+    // Install animation handler
+    const mixer = new ANIM.SkeletonAnimation(object, 'idle', Math.floor(Math.random() * 1000));
+    object.unit.animationMixer = mixer;
+    animations.push(mixer);
+    // Add planner if needed
+    if (object.unit.plan) {
+	let planner;
+	if (object.unit.plan == 'human') {
+	    planner = new PLAN.HumanPlanner(object, document, 0.05, null, mixer);
 
-function onGuyCollide(collision) {
-    const object = collision.object;
-    const target = collision.tobject;
-    if (target.unit) {
-	if (target.unit.model == 'chair') {
-	    // Chair hit
-	    if(!target.unit.touched) {
-		// i dont want this
-		if (!object.unit.planner.winner) {
-		    object.unit.planner.winner = true;
-		}
-		handleChairCollision(target);
-
-	    }
-	} else {
-	    // Point away from the object, in order to simulate reflections
-	    const iNormL = computeLocalCollisionNormal(object, collision.bbox, collision.ibbox);
-	    const newDir = new THREE.Vector3(1,0,0).reflect(iNormL);
-	    object.rotation.set(object.rotation.x,
-				object.rotation.y + new THREE.Vector3(1,0,0).angleTo(newDir),
-				object.rotation.z);
+	} else if (object.unit.plan == 'ai_easy') {
+	    planner = new PLAN.ChairFinder(object, gameState, 0.05, 0.03, null, mixer);
 	}
+	else if (object.unit.plan == 'ai_hard') {
+	    planner = new PLAN.ChairFinder(object, gameState, 0.07, 0.05, null, mixer);
+	}
+	object.unit.planner = planner;
+	planners.push(planner);
     }
 }
 
+function onChairQuery(chair) {
+    if (gameState.state != 1) return false;
+    if (chair.touched) return false;
+    chair.touched = true;
+    return true;
+}
+
 function handleChairCollision(chair) {
-    // :)
-    console.log('Im so dirty :(');
     chair.unit.touched = true;
     // check winning conditions
     if (checkWinningCondition()) endGame();
@@ -244,16 +257,14 @@ function endGame() {
     // kill non winning characters
     for (const u in units) {
 	const unit = units[u];
-	if (unit.model == 'simguy') {
+	if (unit.model == 'skeleton') {
 	    if (unit.planner) {
-		console.log(unit.planner.winner);
 		if (!unit.planner.winner) {
 		    scene.remove(unit.scene);
 		}
 	    }
 	}
     }
-    render();
 }
 
 function createObjectBBox(object, isDynamic) {
@@ -303,6 +314,7 @@ function initScene() {
 }
 
 function initMapLights(mapScene) {
+    scene.add(new THREE.AmbientLight( 0x202020 ));
     add_pointLight([0, 2, 0], colorPotion, 1, 8);
     const lightPositions = [
 	[-6.5, 3.4, -5.5],
@@ -353,8 +365,7 @@ function initMapObjectBBox(scene) {
     ];
     scene.traverse( (object) => {
 	if (!blackList.includes(object.name)) {
-	    createObjectBBox(object, false);
-	    
+	    createObjectBBox(object, false);	    
 	}
     });
     
@@ -363,8 +374,12 @@ function initMapObjectBBox(scene) {
 /**
  * Rendering function
  */
-function render() {
+function render(time) {
     requestAnimationFrame(render);
+    if (time > 10000 && !gameState.state)
+	gameState.state = 1;
+    //gameState.state = 1;
+    
     // Update dynamic bboxes and check collisions
     for (let i = 0; i < dbboxes.length; ++i) {
 	COLL.updateBBox(dbboxes[i]); // Update bounding box
@@ -381,8 +396,17 @@ function render() {
 	// Check if unit has onCollision()
 	const object = collision.object;
 	const target = collision.tobject;
-	if (object.unit.onCollision) {
-	    object.unit.onCollision(collision)
+	if (target.unit) {
+	    if (target.unit.model == 'chair') {
+		if (object.unit.planner.onChairCollision) {
+		    object.unit.planner.onChairCollision(collision);
+		    gameState.onUpdate();
+		}
+	    }
+	}
+	
+	if (object.unit.planner.onCollision) {
+	    object.unit.planner.onCollision(collision)
 	}
     }
     // Clean resolved collisions
@@ -394,7 +418,7 @@ function render() {
 	animations[i].update(deltaTime);
     }
     for (let i = 0; i < planners.length; ++i) {
-	planners[i].update(clock.getElapsedTime());
+	planners[i].update(deltaTime);
     }
     renderer.render(scene, camera);
     
