@@ -126,6 +126,19 @@ export class SkeletonAnimation extends AnimationHandler {
 			     Math.max(0.0, Math.sin(this.time * 20)/2));
 
 	}
+	if (this.pose == 'sit') {
+	    setObjectZRot(this.object, 'upperlegL', Math.PI/2 - 0.3);
+	    setObjectZRot(this.object, 'lowerlegL',
+			  -Math.PI/2 + 0.3 +
+			  Math.sin(this.time * 4) / 10);
+	    setObjectZRot(this.object, 'upperlegR', Math.PI/2 - 0.3);
+	    setObjectZRot(this.object, 'lowerlegR',
+			  -Math.PI/2 + 0.5 +
+			  Math.cos(this.time * 4) / 10);
+
+	    setObjectXRot(this.object, 'head', Math.sin(this.time * 4) / 5);
+	    setObjectZRot(this.object, 'torso', Math.sin(this.time * 2) / 15);
+	}
     }
     setPose(pose) {
 	if (this.pose == pose) return;

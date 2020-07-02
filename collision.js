@@ -5,6 +5,8 @@ export function updateBBox(dbbox) {
 }
 
 export function checkCollision(dbbox, cbbox) {
+    // if exclCollision is defined, then dbbox may not collide
+    if (dbbox.object.exclCollisions) return null;
     if (dbbox.bbox.intersectsBox(cbbox.bbox)) {
 	// Intersection happened, return intersection bbox
 	const ibbox = new THREE.Box3().copy(cbbox.bbox).intersect(dbbox.bbox);

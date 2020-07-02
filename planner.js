@@ -62,7 +62,11 @@ export class HumanPlanner extends Planner {
 	this.helper = helper;
     }
     update(time) {
-	this.time = time;	
+	this.time = time;
+	if (this.die) {
+	    this.animationHandler.setPose('die');
+	    return;
+	}
 	if (this.keyPressed['w']) {
 	    this.currentSpeed = this.speed;
 	    this.animationHandler.setPose('walk2');
@@ -108,6 +112,11 @@ export class HumanPlanner extends Planner {
 	    }
 	}
     }
+
+    onDie() {
+	super.onDie();
+    }
+	
 }
 
 function getChairDir (object, chair) {
@@ -227,4 +236,4 @@ export class ChairFinder extends Planner {
 	super.die();
     }
     
-}
+}				  

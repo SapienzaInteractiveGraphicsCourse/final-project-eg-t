@@ -59,7 +59,7 @@ function main() {
 	simguy = new THREE.Object3D().add(mesh.clone());
 	scene.add(simguy);
 	mixer = new ANIM.SkeletonAnimation(simguy, 'idle', Math.floor(Math.random() * 1000));
-	mixer.setPose('die');
+	mixer.setPose('sit');
 	mixer.time = 0;
 	render();
     });

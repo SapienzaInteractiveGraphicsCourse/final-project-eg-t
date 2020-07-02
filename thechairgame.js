@@ -40,10 +40,10 @@ var collisions    = []; // Current collisions to be resolved.
 
 const chairs      = []; // List of chairs available
 
+var currentAiCount = 0;
+var currentChairCount = 0;
+
 const models = {
-    'simguy': {
-	file:'simguy/simguy.gltf'
-    },
     'map': {
 	file:'map/map.gltf'
     },
@@ -55,55 +55,99 @@ const models = {
     }
 }
 
-const units = {
-    'map1': {model:'map', onLoad:onMapLoaded},
-    'chair1':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
-    'chair2':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
-    'chair3':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
-    'chair4':{model:'chair', onLoad:onChairLoaded, onQuery:onChairQuery},
-    'guy1': {
-	model:       'skeleton',
-	mesh:        'baseframe',
-	onLoad:      onGuyLoaded,
-	position:    new THREE.Vector3(5, 0, 3),
-	scale:       Math.max(0.2, Math.random() * 0.5),
-	plan:        'ai_hard'
-	
+var units = {};
+
+function addPlayer(position, scale) {
+    units['player'] = {
+	model:     'skeleton',
+	mesh:      'baseframe',
+	onLoad:    onGuyLoaded,
+	position : position,
+	scale:     scale,
+	plan:      'human'	
+    };
+}
+
+function addAI(position, scale, diff='ai_easy') {
+    units['ai'+currentAiCount++] = {
+	model:     'skeleton',
+	mesh:      'baseframe',
+	onLoad:    onGuyLoaded,
+	position : position,
+	scale:     scale,
+	plan:      diff	
+    };
+}
+
+function addChair() {
+    units['chair' + currentChairCount++] = {
+	model:'chair',
+	onLoad:onChairLoaded,
+	onQuery:onChairQuery,
+	touched:false
+    };
+}
+
+function addMap() {
+    units['map'] = {
+	model:'map',
+	onLoad:onMapLoaded
+    }
+}
+
+const guiProps = {
+    restart: () => {
+	resetGame();
+	setupUnits();
+	loadModels();
     },
-    'guy2': {
-	model:       'skeleton',
-	mesh:        'baseframe',
-	onLoad:      onGuyLoaded,
-	position:    new THREE.Vector3(3, 0, -7),
-	scale:       Math.max(0.2, Math.random() * 0.5),
-	plan:        'ai_hard'
-    },
-    'guy3': {
-	model:       'skeleton',
-	mesh:        'baseframe',
-	onLoad:      onGuyLoaded,
-	position:    new THREE.Vector3(1, 0, 5),
-	scale:       Math.max(0.2, Math.random() * 0.5),
-	plan:        'human'
-    },
-    'guy4': {
-	model:       'skeleton',
-	mesh:        'baseframe',
-	onLoad:      onGuyLoaded,
-	position:    new THREE.Vector3(-3, 0, -3),
-	scale:       Math.max(0.2, Math.random() * 0.5),
-	plan:        'ai_easy'
-    },
-    'guy5': {
-	model:       'skeleton',
-	mesh:        'baseframe',
-	onLoad:      onGuyLoaded,
-	position:    new THREE.Vector3(-2, 0, 6),
-	scale:       Math.max(0.2, Math.random() * 0.5),
-	plan:        'ai_easy'
+    noSkeletons: 4,
+    noChairs   : 3,
+    difficulty : 'ai_hard'
+};
+
+function setupUnits() {
+    // add map if not loaded
+    if (!units['map'])
+	addMap();
+    // add chairs
+    for( let i = 0; i < guiProps.noChairs; ++i) {
+	addChair();
+    }
+    // add player
+    addPlayer(new THREE.Vector3(5, 0, 3), 0.35);
+    // add skeletons
+    for (let i = 0; i < guiProps.noSkeletons-1; ++i) {
+	addAI(new THREE.Vector3(1,0,1).set(Math.random() * 5, 0, Math.random() * 5),
+	      0.3, guiProps.difficulty);
     }
     
-};
+}
+
+function resetGame() {
+    // Remove all istances
+    for (const inst in units) {
+	let isDynamic = inst.plan;
+	removeObject(inst.scene, true, isDynamic);
+    }			      
+    // Clean scene
+    while(scene.children.length > 0)
+	scene.remove(scene.children[0]);
+
+    // Clean bboxes arrays
+    units = {};
+    animations.splice(0, animations.length);
+    planners.splice(0, planners.length);
+    cbboxes.splice(0, cbboxes.length);
+    dbboxes.splice(0, dbboxes.length);
+    collisions.splice(0, collisions.length);
+    chairs.splice(0, chairs.length);
+
+    // Reset game state
+    gameState.state = 0;
+    baseTime = currentTime;
+    phase0Length = Math.floor(Math.random() * 5000 + 7000);
+}
 
 const gameState = {
     state: 0,
@@ -115,7 +159,6 @@ const gameState = {
 		endGame();
 	    }
 	}
-	
     }
 };
 
@@ -194,9 +237,8 @@ function onChairLoaded(object) {
     object.position.set((Math.random() - 0.5) * 10,
 			0,
 			(Math.random() - 0.5) * 10);
-    object.rotation.set(0,
-			Math.random() * 2 * Math.PI,
-			0);
+    object.lookAt(0,0,0);
+    object.rotateY(Math.PI/2);
     createObjectBBox(object, false);
     chairs.push(object);
 }
@@ -222,6 +264,8 @@ function onGuyLoaded(object) {
 	}
 	else if (object.unit.plan == 'ai_hard') {
 	    planner = new PLAN.ChairFinder(object, gameState, 0.07, 0.05, null, mixer);
+	} else if (object.unit.plan == 'ai_unfair') {
+	    planner = new PLAN.ChairFinder(object, gameState, 0.09, 0.09, null, mixer);
 	}
 	object.unit.planner = planner;
 	planners.push(planner);
@@ -275,7 +319,7 @@ function endGame() {
 	}
     }
     // kill non winning characters
-    console.log(looser);
+    //console.log(looser);
     looser.planner.onDie();
     // clean up units list.
     setTimeout(() => {
@@ -330,7 +374,7 @@ function removeObject(object, removeBB=true, isDynamic=false) {
 	    scene.remove(bbox.bbox);
 	}
     }
-    
+    if (!object) return;
     // Dispose object properties
     if (object.geometry)
 	object.geometry.dispose();
@@ -508,6 +552,7 @@ function main() {
     initRenderer();
     initCamera();
     initScene();
+    addMap();
     loadModels();
     //const controls  = new OrbitControls(camera, renderer.domElement);
     //controls.update();
@@ -527,6 +572,17 @@ function main() {
 	renderer.setSize( window.innerWidth, window.innerHeight);
     }
     window.addEventListener('resize', onWindowResize);
+
+    window.onload = function() {
+	const gui = new dat.GUI();
+	const skController = gui.add(guiProps, 'noSkeletons', 2, 6).step(1);
+	skController.onChange(function (value) {
+	    guiProps.noChairs = value-1;
+	});
+	gui.add(guiProps, 'difficulty', ['ai_easy', 'ai_hard', 'ai_unfair']);
+	
+	gui.add(guiProps, 'restart').name('Start Game');
+    }
     render();
 }
 
