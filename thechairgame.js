@@ -10,10 +10,10 @@ import * as COLL from './collision.js';
  * Parameters
  */
 // Camera
-const aspect = window.innerWidth / window.innerHeight;
+var aspect = window.innerWidth / window.innerHeight;
 const near   = 5;
 const far    = 1000;
-const d      = 9;
+const d      = 6;
 // Scene
 const backgroundColor = 0x281E5D; // indigo
 const colorPotion     = 0xB8FF70;
@@ -66,7 +66,7 @@ const units = {
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
 	position:    new THREE.Vector3(5, 0, 3),
-	scale:       0.3,
+	scale:       Math.max(0.2, Math.random() * 0.5),
 	plan:        'ai_hard'
 	
     },
@@ -75,23 +75,23 @@ const units = {
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
 	position:    new THREE.Vector3(3, 0, -7),
-	scale:       0.3,
-	plan:        'human'
+	scale:       Math.max(0.2, Math.random() * 0.5),
+	plan:        'ai_hard'
     },
     'guy3': {
 	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
 	position:    new THREE.Vector3(1, 0, 5),
-	scale:       0.3,
-	plan:        'ai_hard'
+	scale:       Math.max(0.2, Math.random() * 0.5),
+	plan:        'human'
     },
     'guy4': {
 	model:       'skeleton',
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
 	position:    new THREE.Vector3(-3, 0, -3),
-	scale:       0.3,
+	scale:       Math.max(0.2, Math.random() * 0.5),
 	plan:        'ai_easy'
     },
     'guy5': {
@@ -99,7 +99,7 @@ const units = {
 	mesh:        'baseframe',
 	onLoad:      onGuyLoaded,
 	position:    new THREE.Vector3(-2, 0, 6),
-	scale:       0.3,
+	scale:       Math.max(0.2, Math.random() * 0.5),
 	plan:        'ai_easy'
     }
     
@@ -242,6 +242,7 @@ function handleChairCollision(chair) {
 }
 
 function checkWinningCondition() {
+    if (gameState.state == 2) return false;
     let availableChairs = chairs.length;
     for (const chair of chairs) {
 	if (chair.unit.touched)
@@ -254,17 +255,90 @@ function checkWinningCondition() {
 }
 
 function endGame() {
-    // kill non winning characters
+    // set phase 2 as temporary
+    gameState.state = 2;
+    let winner = null;
+    let looser = null;
     for (const u in units) {
 	const unit = units[u];
 	if (unit.model == 'skeleton') {
 	    if (unit.planner) {
-		if (!unit.planner.winner) {
-		    scene.remove(unit.scene);
+		if (!unit.planner.winner &&
+		    !unit.planner.die) {
+		    looser = unit;
+		} else {
+		    // reset winning characters
+		    unit.planner.reset();
+		    winner = unit;
 		}
 	    }
 	}
     }
+    // kill non winning characters
+    console.log(looser);
+    looser.planner.onDie();
+    // clean up units list.
+    setTimeout(() => {
+	removeObject(looser.scene, true, true);
+	// remove one of the chairs
+	const removedChair = chairs.shift();
+	removeObject(removedChair);
+	// reset chairs
+	for (const c of chairs) {
+	    c.unit.touched = false;
+	}
+	if (chairs.length > 0) {
+	    // Reset to phase 0
+	    gameState.state = 0;
+	    // Update baseTime
+	    baseTime = currentTime;
+	    // Generate new phase0Length
+	    phase0Length = Math.floor(Math.random() * 5000 + 7000);
+	} else {
+	    // Close the game
+	    winner.planner.winner = true;
+	    console.log("Game has ended.");
+	}    
+    }, 1500);		    
+}
+
+function removeObject(object, removeBB=true, isDynamic=false) {    
+    // Remove dbboxes/cbboxes entry
+    if (removeBB) {
+	let bbox = null;
+	if (isDynamic) {
+	    // search in dbboxes
+	    for (let bb of dbboxes) {
+		if (bb.object == object) {
+		    bbox = bb;
+		    const idx = dbboxes.indexOf(bb);
+		    dbboxes.splice(idx, 1);
+		}
+	    }
+	} else {
+	    // search in cbboxes
+	    for (let bb of cbboxes) {
+		if (bb.object == object) {
+		    bbox = bb;
+		    const idx = cbboxes.indexOf(bb);
+		    cbboxes.splice(idx, 1);
+		}
+	    }
+	}
+	// Remove object's bounding box
+	if (bbox) {
+	    scene.remove(bbox.bbox);
+	}
+    }
+    
+    // Dispose object properties
+    if (object.geometry)
+	object.geometry.dispose();
+    if (object.material)
+	object.material.dispose();
+    // Remove object from scene
+    scene.remove(object);
+
 }
 
 function createObjectBBox(object, isDynamic) {
@@ -374,11 +448,17 @@ function initMapObjectBBox(scene) {
 /**
  * Rendering function
  */
+
+var currentTime = 0;
+var baseTime = 0;
+var phase0Length = Math.floor(Math.random() * 5000 + 7000);
+
+
 function render(time) {
     requestAnimationFrame(render);
-    if (time > 10000 && !gameState.state)
+    currentTime = time;
+    if ((currentTime - baseTime) > phase0Length && !gameState.state)
 	gameState.state = 1;
-    //gameState.state = 1;
     
     // Update dynamic bboxes and check collisions
     for (let i = 0; i < dbboxes.length; ++i) {
@@ -389,7 +469,6 @@ function render(time) {
 	}
     }
     // Resolve collisions
-    //if (collisions.length > 0) console.log('Found ', collisions.length, ' collisions.');
     for (let i = 0; i < collisions.length; ++i) {
 	const collision = collisions[i];
 	COLL.evalCollision(collision.object, collision.bbox, collision.ibbox);
@@ -432,6 +511,22 @@ function main() {
     loadModels();
     //const controls  = new OrbitControls(camera, renderer.domElement);
     //controls.update();
+
+    function onWindowResize() {
+	aspect = window.innerWidth / window.innerHeight;
+
+	camera.bottom = -d;
+	camera.up = d;
+	camera.left = -d * aspect;
+	camera.right = d * aspect;
+
+	
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setPixelRatio(window.devicePixelRatio);
+	renderer.setSize( window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', onWindowResize);
     render();
 }
 

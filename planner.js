@@ -10,6 +10,20 @@ export class Planner {
     constructor(object, animationHandler) {
 	this.object = object;
 	this.animationHandler = animationHandler;
+	this.winner = false;
+	this.die = false;
+	this.time = 0
+    }
+
+    reset() {
+	this.winner = false;
+    }
+
+    onDie() {
+	this.die = true;
+	this.dieTime = this.time;
+	this.animationHandler.time = 0;
+	this.animationHandler.setPose('die');
     }
 }
 
@@ -48,9 +62,10 @@ export class HumanPlanner extends Planner {
 	this.helper = helper;
     }
     update(time) {
+	this.time = time;	
 	if (this.keyPressed['w']) {
 	    this.currentSpeed = this.speed;
-	    this.animationHandler.setPose('walk');
+	    this.animationHandler.setPose('walk2');
 	} else if (this.keyPressed['s']) {
 	    this.currentSpeed = -this.speed;
 	    this.animationHandler.setPose('walk');
@@ -60,12 +75,20 @@ export class HumanPlanner extends Planner {
 	} else if (this.keyPressed['d']) {
 	    this.currentASpeed = -this.aspeed;
 	}
-	if (this.currentSpeed == 0.0)
-	    this.animationHandler.setPose('idle');
+	if (this.currentSpeed == 0.0) {
+	    // Stop if won
+	    if (this.winner)
+		this.animationHandler.setPose('win');
+	    else
+		this.animationHandler.setPose('idle');
+	}
 	this.object.rotateY(this.currentASpeed);
 	this.object.translateOnAxis(new THREE.Vector3(1, 0, 0), this.currentSpeed);
 	this.currentSpeed = 0.0;
 	this.currentASpeed = 0.0;
+
+	
+	
 	if (this.helper) {
 	    const posHelper = new THREE.Vector3().copy(this.object.position).setY(2);
 	    const dirHelper = new THREE.Vector3(1, 0, 0);
@@ -82,7 +105,6 @@ export class HumanPlanner extends Planner {
 	if (chair.onQuery) {
 	    if (chair.onQuery(chair)) {
 		this.winner = true;
-		console.log('I won.');
 	    }
 	}
     }
@@ -112,10 +134,20 @@ export class ChairFinder extends Planner {
 	this.chairs = gstate.chairs;
 	this.speed  = speed;
 	this.aspeed = aspeed; // angular speed
-	this.winner = false;
 	this.helper = helper;
     }
     update(time) {
+	this.time = time;
+	// Stop is died
+	if (this.die) {
+	    this.animationHandler.setPose('die');
+	    return;
+	}
+	// Stop if won
+	if (this.winner) {
+	    this.animationHandler.setPose('win');
+	    return;
+	}
 	this.animationHandler.setPose('idle');
 	if (this.state.state == 0) {
 	    // Random walk
@@ -124,12 +156,11 @@ export class ChairFinder extends Planner {
 					 time);
 	    this.object.rotateY(rnStep * this.aspeed * 5);
 	    this.object.translateOnAxis(new THREE.Vector3(1,0,0), this.speed);
-	    this.animationHandler.setPose('zombie_walk');
+	    this.animationHandler.setPose('walk2');
 	} else if (this.state.state == 1) {
 	    // Chair finder
-	    // Stop if won
-	    if (this.winner) return;
 	    // Find closest available chair
+	    
 	    let minDist = Infinity;
 	    let tChair  = null;
 	    for (let i = 0; i < this.chairs.length; ++i) {
@@ -150,34 +181,36 @@ export class ChairFinder extends Planner {
 		// https://answers.unity.com/questions/24983/how-to-calculate-the-angle-between-two-vectors.html
 		// Use local right-pointing vector to estimate oDirLocal direction
 		let refForward = new THREE.Vector3(1, 0, 0);
-		let refRight   = new THREE.Vector3(0, 0, -1);
+		let refRight   = new THREE.Vector3(0, 0, 1);
 		let asign = Math.sign(refRight.dot(oDirLocal));
 		let angle = new THREE.Vector3(1, 0, 0).angleTo(oDirLocal);
-		let astep = asign * angle;
-		
+		let astep = asign * angle;		
 		
 		astep = Math.max(-this.aspeed, Math.min(astep, this.aspeed)); // clamp astep
-		this.object.rotation.set(this.object.rotation.x,
-					 this.object.rotation.y + astep,
-					 this.object.rotation.z);
+		this.object.rotateY(-astep);
 		
 		// Look at the chair and move towards it
-		this.object.translateOnAxis(new THREE.Vector3(1,0,0), this.speed);
+		this.object.translateOnAxis(new THREE.Vector3(1,0,0),
+					    Math.max(0.0, new THREE.Vector3(1,0,0).dot(oDirLocal)) * this.speed);
 	    }
 	    this.animationHandler.setPose('zombie_walk');	
 	}
     }
 
     onCollision(collision) {
-	const object = collision.object;
-	const target = collision.tobject;	
-	const iNormL = COLL.computeLocalCollisionNormal(object, collision.bbox,
-							collision.ibbox);
-	// Helpers
-	const newDir = new THREE.Vector3(1,0,0).reflect(iNormL);
-	object.rotation.set(object.rotation.x,
-			    object.rotation.y + new THREE.Vector3(1,0,0).angleTo(newDir),
-			    object.rotation.z);	
+	if (this.state.state == 0) {
+	    // Reflect trajectory on normal if random walking
+	    const object = collision.object;
+	    const target = collision.tobject;	
+	    const iNormL = COLL.computeLocalCollisionNormal(object, collision.bbox,
+							    collision.ibbox);
+	    // Helpers
+	    const newDir = new THREE.Vector3(1,0,0).reflect(iNormL);
+	    object.rotation.set(object.rotation.x,
+				object.rotation.y + new THREE.Vector3(1,0,0).angleTo(newDir),
+				object.rotation.z);
+	}
+	
     }
 
     onChairCollision(collision) {
@@ -186,9 +219,12 @@ export class ChairFinder extends Planner {
 	if (chair.onQuery) {
 	    if (chair.onQuery(chair)) {
 		this.winner = true;
-		console.log('I won.');
 	    }
 	}
+    }
+    
+    die() {
+	super.die();
     }
     
 }

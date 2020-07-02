@@ -1,19 +1,21 @@
 import * as THREE from './resources/three/build/three.module.js';
 import {GLTFLoader} from './resources/three/examples/jsm/loaders/GLTFLoader.js';
 import {OrbitControls} from './resources/three/examples/jsm/controls/OrbitControls.js';
+import * as ANIM from './animation.js';
 
 
 // Camera
 const aspect = window.innerWidth / window.innerHeight;
 const near   = 5;
 const far    = 1000;
-const d      = 11;
+const d      = 6;
 
 // Base objects
 const container = document.getElementById('container');
 const renderer  = new THREE.WebGLRenderer();
 const camera    = new THREE.OrthographicCamera(-d * aspect, d*aspect, d, -d, near, far);
 const scene     = new THREE.Scene();
+const clock     = new THREE.Clock();
 const gui       = new dat.GUI();
 const guiParams = {
     zShoulderR : 0,
@@ -30,6 +32,7 @@ const guiParams = {
 
 
 var simguy;
+var mixer;
 
 function main() {
     // Init renderer
@@ -42,7 +45,7 @@ function main() {
     scene.background = new THREE.Color(0xAAAAAA);
 
     // Init camera
-    camera.position.set(20, 20, -20);
+    camera.position.set(10, 10, -10);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -50,13 +53,14 @@ function main() {
 
     // Loader
     const loader = new GLTFLoader();
-    loader.load('./resources/models/simguy/simguy.gltf', (gltf) => {
+    loader.load('./resources/models/skeleton/scene.gltf', (gltf) => {
 	const root = gltf.scene;
 	const mesh = root.getObjectByName('baseframe');
 	simguy = new THREE.Object3D().add(mesh.clone());
 	scene.add(simguy);
-	console.log(simguy);
-	initGUI();
+	mixer = new ANIM.SkeletonAnimation(simguy, 'idle', Math.floor(Math.random() * 1000));
+	mixer.setPose('die');
+	mixer.time = 0;
 	render();
     });
 
@@ -69,6 +73,8 @@ function main() {
 	handleBody(simguy, guiParams);
 	controls.update();
 	elapsedTime++;
+	let deltaTime = clock.getDelta();
+	mixer.update(deltaTime);
 	renderer.render(scene, camera);
     }
     
