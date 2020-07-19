@@ -15,4 +15,20 @@ Before taking your favourite seat, you may want to inspect for a moment these in
 
 You can test the current build of the game [here](https://sapienzainteractivegraphicscourse.github.io/final-project-eg-t/)
 
+If you want to read more about the game's development, you can read the documentation [here](https://github.com/SapienzaInteractiveGraphicsCourse/final-project-eg-t/blob/master/giacomini_1743995.pdf)
+
 ## Known bugs
+Here is a list of known bugs from the game:
+
+* There is a chance that chairs configuration will create some corners inside the scene and skeletons may get stuck in there, forcing the game to continue for eternity.
+
+## Contributors
+The game is fully developed by `Emanuele Giacomini`.
+
+However it is important to also mention the set of modules and extra elements used to fully develop every aspect of the game:
+
+* The game relies on [THREE JS](https://threejs.org/) library.
+* Perlin noise used by the AI for random walks is based on [NoiseJS](https://github.com/josephg/noisejs) from __josephg__
+* The game's GUI is based on [dat.GUI](https://github.com/dataarts/dat.gui) from __dataarts__.
+* The Skeleton model was made by the user __Akseley__ and it is available [here](https://skfb.ly/SMxS).
+* All other models present in the game are made by `Emanuele Giacomini`.
