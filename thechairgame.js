@@ -106,14 +106,19 @@ const guiProps = {
     difficulty : 'ai_hard'
 };
 
+function setupChairs() {
+    // add chairs
+    for( let i = 0; i < guiProps.noChairs; ++i) {
+	addChair();
+    }
+}
+
 function setupUnits() {
     // add map if not loaded
     if (!units['map'])
 	addMap();
     // add chairs
-    for( let i = 0; i < guiProps.noChairs; ++i) {
-	addChair();
-    }
+    setupChairs();
     // add player
     addPlayer(new THREE.Vector3(5, 0, 3), 0.35);
     // add skeletons
@@ -171,6 +176,8 @@ function loadModel(model, onLoadComplete) {
 	onLoadComplete();
     });
 }
+
+
 
 function loadModels() {
     let loadedModels = 0;
@@ -234,13 +241,29 @@ function onMapLoaded(scene) {
 
 function onChairLoaded(object) {
     enableShadows(object);
-    object.position.set((Math.random() - 0.5) * 10,
-			0,
-			(Math.random() - 0.5) * 10);
-    object.lookAt(0,0,0);
-    object.rotateY(Math.PI/2);
+    // Set Y position as to hide the chairs
+    object.position.set(0,
+			10,
+			0);
     createObjectBBox(object, false);
     chairs.push(object);
+}
+
+function setChairPositions(setVisible) {
+    for (const object of chairs) {
+	let x = 0;
+	let y = 10;
+	let z = 0;
+	if (setVisible) {
+	    x = (Math.random() - 0.5) * 10;
+	    y = 0;
+	    z = (Math.random() - 0.5) * 10;
+	}
+	object.position.set(x, y, z);
+	object.lookAt(0,0,0);
+	object.rotateY(Math.PI/2);
+	updateObjectBBox(object, false);
+    }
 }
 
 function onGuyLoaded(object) {
@@ -338,6 +361,8 @@ function endGame() {
 	    baseTime = currentTime;
 	    // Generate new phase0Length
 	    phase0Length = Math.floor(Math.random() * 5000 + 7000);
+	    // Hide chairs
+	    setChairPositions(false);
 	} else {
 	    // Close the game
 	    winner.planner.winner = true;
@@ -391,6 +416,19 @@ function createObjectBBox(object, isDynamic) {
     else cbboxes.push({object, bbox});
     //scene.add(new THREE.Box3Helper(bbox));
     return bbox;
+}
+
+function updateObjectBBox(object, isDynamic) {
+    if (isDynamic) {
+	// TODO search for object in ddboxes and update bbox
+    } else {
+	// Search for object in cbboxes and update bbox
+	for (const cbbox of cbboxes) {
+	    if (cbbox.object == object) {
+		cbbox.bbox.setFromObject(object);
+	    }
+	}
+    }
 }
 
 function enableShadows(scene) {
@@ -501,8 +539,11 @@ var phase0Length = Math.floor(Math.random() * 5000 + 7000);
 function render(time) {
     requestAnimationFrame(render);
     currentTime = time;
-    if ((currentTime - baseTime) > phase0Length && !gameState.state)
+    if ((currentTime - baseTime) > phase0Length && gameState.state == 0) {
+	setChairPositions(true);
 	gameState.state = 1;
+    }
+	
     
     // Update dynamic bboxes and check collisions
     for (let i = 0; i < dbboxes.length; ++i) {
