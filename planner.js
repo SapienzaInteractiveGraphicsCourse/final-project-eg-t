@@ -105,6 +105,7 @@ export class HumanPlanner extends Planner {
     }
 
     onChairCollision(collision) {
+	if (this.winner) return;
 	const chair = collision.tobject.unit;
 	if (chair.onQuery) {
 	    if (chair.onQuery(chair)) {

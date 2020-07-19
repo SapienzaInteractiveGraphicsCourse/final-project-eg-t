@@ -261,7 +261,20 @@ function setChairPositions(setVisible) {
 	    z = (Math.random() - 0.5) * 10;
 	    // if x and z positions are too close to (0,0)
 	    // offset to a feasible position
-	    
+	    if (Math.abs(x) < 1.0) {
+		if (Math.random() > 0.5) {
+		    x += 1.0;
+		} else {
+		    x -= 1.0;
+		}
+	    }
+	    if (Math.abs(z) < 1.0) {
+		if (Math.random() > 0.5) {
+		    z += 1.0;
+		} else {
+		    z -= 1.0;
+		}
+	    }
 	}
 	object.position.set(x, y, z);
 	object.lookAt(0,0,0);
