@@ -30,6 +30,7 @@ const camera    = new THREE.OrthographicCamera(-d * aspect, d*aspect, d, -d, nea
 const scene     = new THREE.Scene();
 const clock     = new THREE.Clock();
 
+
 // Custom objects
 const animations = [];
 const planners   = [];
@@ -258,6 +259,9 @@ function setChairPositions(setVisible) {
 	    x = (Math.random() - 0.5) * 10;
 	    y = 0;
 	    z = (Math.random() - 0.5) * 10;
+	    // if x and z positions are too close to (0,0)
+	    // offset to a feasible position
+	    
 	}
 	object.position.set(x, y, z);
 	object.lookAt(0,0,0);
@@ -280,7 +284,7 @@ function onGuyLoaded(object) {
     if (object.unit.plan) {
 	let planner;
 	if (object.unit.plan == 'human') {
-	    planner = new PLAN.HumanPlanner(object, document, 0.05, null, mixer);
+	    planner = new PLAN.HumanPlanner(object, document, 0.06, 0.05, null, mixer);
 
 	} else if (object.unit.plan == 'ai_easy') {
 	    planner = new PLAN.ChairFinder(object, gameState, 0.05, 0.03, null, mixer);

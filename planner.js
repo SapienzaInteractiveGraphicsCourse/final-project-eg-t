@@ -46,10 +46,10 @@ export class RandomWalker extends Planner {
 }
 
 export class HumanPlanner extends Planner {
-    constructor(object, document, speed, helper=null, animationHandler=null) {
+    constructor(object, document, speed, aspeed, helper=null, animationHandler=null) {
 	super(object, animationHandler);
 	this.speed = speed;
-	this.aspeed = speed / 2;
+	this.aspeed = aspeed;
 	this.currentSpeed = 0.0;
 	this.currentASpeed = 0.0;
 	this.keyPressed = {};
